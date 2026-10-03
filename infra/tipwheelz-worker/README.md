@@ -34,9 +34,9 @@ checkout is unconfigured. Do not point the public page at it yet.
 Before enabling live checkout, add all nine live `STRIPE_PRICE_TIP_5`,
 `STRIPE_PRICE_TIP_10`, `STRIPE_PRICE_TIP_25`, `STRIPE_PRICE_TIP_50`,
 `STRIPE_PRICE_TIP_100`, `STRIPE_PRICE_MONTHLY_3`, `STRIPE_PRICE_MONTHLY_7`,
-`STRIPE_PRICE_MONTHLY_15`, and `STRIPE_PRICE_MONTHLY_30` bindings. The last
-price ($30/month) has not been created yet because Stripe's automatic approval
-review hit a usage limit. Set `STRIPE_API_KEY` to a live restricted key with
+`STRIPE_PRICE_MONTHLY_15`, and `STRIPE_PRICE_MONTHLY_30` bindings. All nine
+live Price IDs are now bound to the production Worker; the $30/month Price is
+`price_1UMc91PS1f7Z3Ox5dJU6yrDc`. Set `STRIPE_API_KEY` to a live restricted key with
 Checkout Session and Billing Portal session creation permissions, plus
 `STRIPE_WEBHOOK_SECRET` as production secrets. Independent production
 `RATE_LIMIT_SALT` and `PORTAL_TOKEN_SECRET` values are already installed;
