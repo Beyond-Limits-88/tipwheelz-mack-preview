@@ -72,7 +72,9 @@ async function billingPortal(request, env, origin) {
   if (!match || (env.DEPLOYMENT_MODE === 'live') !== match[1].startsWith('cs_live_') || Number(match[2]) < Date.now()/1000) return json({error:'Invalid or expired access'},403,origin,env);
   const expected = await portalToken(env, match[1], match[2]);
   if (!constantEqual(bytes(match[3]), bytes(expected.split('.').at(-1)))) return json({error:'Invalid or expired access'},403,origin,env);
-  const row = await env.DB.prepare('SELECT stripe_customer_id FROM payment_ledger WHERE stripe_session_id=? AND flow=? AND stripe_customer_id IS NOT NULL AND payment_status=?').bind(match[1], 'monthly', 'paid').first();
+  const row = await env.DB.prepare(`SELECT stripe_customer_id FROM payment_ledger
+    WHERE stripe_session_id=? AND flow='monthly' AND stripe_customer_id IS NOT NULL
+    AND (payment_status='paid' OR subscription_status='past_due')`).bind(match[1]).first();
   if (!row) return json({error:'No active billing record found'},404,origin,env);
   const params = new URLSearchParams({customer: row.stripe_customer_id, return_url:env.PORTAL_RETURN_URL});
   const portal = await stripePost(env, 'billing_portal/sessions', params);
