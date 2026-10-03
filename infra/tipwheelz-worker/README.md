@@ -28,20 +28,22 @@ token should contact info@rollflow.net. The token expires after 180 days.
 ## Live preparation
 
 The separate `tipwheelz-live` Worker is uploaded with a separate, empty
-`tipwheelz-live-db` D1 database. Its workers.dev subdomain is disabled and its
-checkout is unconfigured. Do not point the public page at it yet.
+`tipwheelz-live-db` D1 database. Its workers.dev subdomain is enabled for
+Stripe's live webhook, but checkout is unconfigured. Do not point the public
+page at it yet.
 
-Before enabling live checkout, add all nine live `STRIPE_PRICE_TIP_5`,
+All nine live `STRIPE_PRICE_TIP_5`,
 `STRIPE_PRICE_TIP_10`, `STRIPE_PRICE_TIP_25`, `STRIPE_PRICE_TIP_50`,
 `STRIPE_PRICE_TIP_100`, `STRIPE_PRICE_MONTHLY_3`, `STRIPE_PRICE_MONTHLY_7`,
-`STRIPE_PRICE_MONTHLY_15`, and `STRIPE_PRICE_MONTHLY_30` bindings. All nine
-live Price IDs are now bound to the production Worker; the $30/month Price is
-`price_1UMc91PS1f7Z3Ox5dJU6yrDc`. Set `STRIPE_API_KEY` to a live restricted key with
-Checkout Session and Billing Portal session creation permissions, plus
-`STRIPE_WEBHOOK_SECRET` as production secrets. Independent production
-`RATE_LIMIT_SALT` and `PORTAL_TOKEN_SECRET` values are already installed;
-do not copy their sandbox counterparts. The Stripe live webhook must target
-`/api/tipwheelz/webhook` on the live Worker. Set `RETURN_URL`,
+`STRIPE_PRICE_MONTHLY_15`, and `STRIPE_PRICE_MONTHLY_30` bindings are installed.
+The $30/month Price is `price_1UMc91PS1f7Z3Ox5dJU6yrDc`. Before enabling live
+checkout, set `STRIPE_API_KEY` to a live restricted key with Checkout Session
+and Billing Portal session creation permissions. `STRIPE_WEBHOOK_SECRET` is
+already installed from live Stripe
+webhook endpoint `we_1UMcCAPS1f7Z3Ox5hrq2IjqV`, which targets
+`https://tipwheelz-live.tipwheelz-rollflow.workers.dev/api/tipwheelz/webhook`.
+Independent production `RATE_LIMIT_SALT` and `PORTAL_TOKEN_SECRET` values are
+also installed; do not copy their sandbox counterparts. Set `RETURN_URL`,
 `PORTAL_RETURN_URL`, and `ALLOWED_ORIGINS` to the final HTTPS site.
 
 The page needs a `pk_live_` key only when the production Worker, live webhook,
