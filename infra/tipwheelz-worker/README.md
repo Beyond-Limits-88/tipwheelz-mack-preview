@@ -38,9 +38,9 @@ Before enabling live checkout, add all nine live `STRIPE_PRICE_TIP_5`,
 price ($30/month) has not been created yet because Stripe's automatic approval
 review hit a usage limit. Set `STRIPE_API_KEY` to a live restricted key with
 Checkout Session and Billing Portal session creation permissions, plus
-`STRIPE_WEBHOOK_SECRET`, `RATE_LIMIT_SALT`, and `PORTAL_TOKEN_SECRET` as
-independent production secrets. The two random salts should not be copied
-from the sandbox. The Stripe live webhook must target
+`STRIPE_WEBHOOK_SECRET` as production secrets. Independent production
+`RATE_LIMIT_SALT` and `PORTAL_TOKEN_SECRET` values are already installed;
+do not copy their sandbox counterparts. The Stripe live webhook must target
 `/api/tipwheelz/webhook` on the live Worker. Set `RETURN_URL`,
 `PORTAL_RETURN_URL`, and `ALLOWED_ORIGINS` to the final HTTPS site.
 
