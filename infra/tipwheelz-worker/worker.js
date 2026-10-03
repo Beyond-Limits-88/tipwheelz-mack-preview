@@ -34,8 +34,9 @@ const headersFor = (origin, env) => ({
 function json(body, status = 200, origin = '', env = {}) {
   return new Response(JSON.stringify(body), {status, headers: headersFor(origin, env)});
 }
-function safeText(value, max) {
-  return typeof value === 'string' && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : null;
+function safeText(value, max, multiline = false) {
+  const forbidden = multiline ? /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f]/ : /[\u0000-\u001f\u007f]/;
+  return typeof value === 'string' && value.length <= max && !forbidden.test(value) ? value.trim() : null;
 }
 function formField(params, key, value) {
   if (value !== undefined && value !== null) params.append(key, String(value));
@@ -100,7 +101,7 @@ async function checkout(request, env, origin) {
   const choice = Object.hasOwn(choices, input.tier) ? choices[input.tier] : null;
   const email = safeText(input.email, 254)?.toLowerCase();
   const name = input.name === undefined ? '' : safeText(input.name, 100);
-  const message = input.message === undefined ? '' : safeText(input.message, 500);
+  const message = input.message === undefined ? '' : safeText(input.message, 500, true);
   const consent = input.wallOfThanksConsent === undefined ? false : input.wallOfThanksConsent;
   if (!choice || choice[0] !== input.flow || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || name === null || message === null || typeof consent !== 'boolean') {
     return json({error: 'Invalid support details'}, 400, origin, env);
