@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall/</loc>
+    <lastmod>2026-10-04T00:36:16.422Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
     <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/thanks/</loc>
     <lastmod>2026-10-04T00:36:09.155Z</lastmod>
     <changefreq>weekly</changefreq>
@@ -13,11 +18,6 @@
   <url>
     <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/</loc>
     <lastmod>2026-10-04T00:35:54.066Z</lastmod>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall/</loc>
-    <lastmod>2026-10-04T00:35:48.025Z</lastmod>
     <changefreq>weekly</changefreq>
   </url>
   <url>
