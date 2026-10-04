@@ -1,6 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/</loc>
+    <lastmod>2026-10-04T00:35:54.066Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall/</loc>
+    <lastmod>2026-10-04T00:35:48.025Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/thanks/</loc>
+    <lastmod>2026-10-04T00:35:47.208Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
+    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/checkout-preview/</loc>
+    <lastmod>2026-10-04T00:35:46.296Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
     <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/terms/</loc>
     <lastmod>2026-10-04T00:34:52.110Z</lastmod>
     <changefreq>weekly</changefreq>
@@ -11,28 +31,8 @@
     <changefreq>weekly</changefreq>
   </url>
   <url>
-    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/thanks/</loc>
-    <lastmod>2026-10-03T23:40:24.247Z</lastmod>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/checkout-preview/</loc>
-    <lastmod>2026-10-03T23:37:27.342Z</lastmod>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/</loc>
-    <lastmod>2026-10-03T23:37:21.771Z</lastmod>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
     <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall-admin/</loc>
     <lastmod>2026-10-03T19:13:12.201Z</lastmod>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall/</loc>
-    <lastmod>2026-10-03T19:00:29.926Z</lastmod>
     <changefreq>weekly</changefreq>
   </url>
 </urlset>
