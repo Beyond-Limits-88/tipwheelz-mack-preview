@@ -19,9 +19,9 @@ function prices(env) {
 }
 function configured(env) {
   const live = env.DEPLOYMENT_MODE === 'live';
-  const key = env.STRIPE_API_KEY || '';
+  const key = env.STRIPE_API_KEY || env.STRIPE_SECRET_KEY || '';
   return Boolean(env.RATE_LIMIT_SALT && (live ? env.RETURN_URL : true) &&
-    (live ? /^rk_live_/.test(key) : /^(rk_test_|sk_test_)/.test(key)) &&
+    (live ? /^(rk_live_|sk_live_)/.test(key) : /^(rk_test_|sk_test_)/.test(key)) &&
     Object.values(prices(env)).every(p => /^price_[A-Za-z0-9]+$/.test(p[1])));
 }
 const encoder = new TextEncoder();
@@ -45,13 +45,24 @@ async function stripePost(env, path, params, idempotency) {
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${env.STRIPE_API_KEY}`,
+      authorization: `Bearer ${env.STRIPE_API_KEY || env.STRIPE_SECRET_KEY}`,
       'content-type': 'application/x-www-form-urlencoded',
       'Stripe-Version': '2026-08-26.dahlia',
       ...(idempotency ? {'Idempotency-Key': idempotency} : {}),
     },
     body: params,
   });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Stripe ${res.status}: ${data.error?.type || 'unknown'}`);
+  return data;
+}
+async function stripeGet(env, path, params) {
+  const url = new URL(`https://api.stripe.com/v1/${path}`);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const res = await fetch(url, {headers:{
+    authorization:`Bearer ${env.STRIPE_API_KEY || env.STRIPE_SECRET_KEY}`,
+    'Stripe-Version':'2026-08-26.dahlia',
+  }});
   const data = await res.json();
   if (!res.ok) throw new Error(`Stripe ${res.status}: ${data.error?.type || 'unknown'}`);
   return data;
@@ -170,7 +181,7 @@ async function webhook(request, env) {
       ON CONFLICT(stripe_session_id) DO UPDATE SET stripe_payment_intent_id=COALESCE(excluded.stripe_payment_intent_id, payment_ledger.stripe_payment_intent_id),
       stripe_customer_id=COALESCE(excluded.stripe_customer_id, payment_ledger.stripe_customer_id),
       stripe_subscription_id=COALESCE(excluded.stripe_subscription_id, payment_ledger.stripe_subscription_id),
-      payment_status=CASE WHEN payment_ledger.payment_status='refunded' OR (excluded.payment_status='pending' AND payment_ledger.payment_status='paid') THEN payment_ledger.payment_status ELSE excluded.payment_status END,
+      payment_status=CASE WHEN payment_ledger.payment_status IN ('refunded','partially_refunded','refund_pending') OR (excluded.payment_status='pending' AND payment_ledger.payment_status='paid') THEN payment_ledger.payment_status ELSE excluded.payment_status END,
       updated_at=CURRENT_TIMESTAMP`)
       .bind(obj.id, obj.payment_intent || null, obj.customer || null, obj.subscription || null, meta.tipwheelz_flow, meta.tipwheelz_tier, obj.amount_total ?? choices[meta.tipwheelz_tier][2], obj.currency || 'usd', obj.customer_details?.email || obj.customer_email || '', meta.tipwheelz_name || '', meta.tipwheelz_message || '', meta.tipwheelz_wall_of_thanks_consent === 'true' ? 1 : 0, status, obj.subscription ? 'active' : null).run();
   } else if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
@@ -182,7 +193,8 @@ async function webhook(request, env) {
       .bind(obj.status || 'canceled', obj.id).run();
   } else if (event.type === 'charge.refunded') {
     const pi = typeof obj.payment_intent === 'string' ? obj.payment_intent : null;
-    if (pi) await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_payment_intent_id=?').bind('refunded', pi).run();
+    if (pi) await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_payment_intent_id=?')
+      .bind(obj.amount_refunded >= obj.amount ? 'refunded' : 'partially_refunded', pi).run();
   } else if (event.type === 'payment_intent.payment_failed') {
     await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_payment_intent_id=?').bind('failed', obj.id).run();
   }
@@ -200,7 +212,8 @@ async function adminWall(request, env, origin) {
   if (request.method === 'GET') {
     const {results} = await env.DB.prepare(`SELECT l.stripe_session_id AS sessionId, l.donor_name AS submittedName,
       l.amount, l.currency, l.flow, l.tier, l.payment_status AS paymentStatus,
-      l.wall_of_thanks_consent AS consent, w.display_name AS displayName, w.approved
+      l.wall_of_thanks_consent AS consent, w.display_name AS displayName, w.approved,
+      CASE WHEN l.payment_status='paid' AND l.stripe_payment_intent_id IS NOT NULL THEN 1 ELSE 0 END AS refundable
       FROM payment_ledger l LEFT JOIN wall_entries w ON w.payment_reference=l.stripe_session_id
       ORDER BY l.created_at DESC LIMIT 100`).all();
     return json({entries: results}, 200, origin, env);
@@ -227,6 +240,40 @@ async function adminWall(request, env, origin) {
   if (!result.meta.changes) return json({error: 'Paid consented payment required'}, 409, origin, env);
   return json({ok: true}, 200, origin, env);
 }
+async function adminRefund(request, env, origin) {
+  if (!(await isWallAdmin(request, env))) return json({error:'Unauthorized'},401,origin,env);
+  if (request.method !== 'POST') return json({error:'Not found'},404,origin,env);
+  if (!configured(env)) return json({error:'Refunds are unavailable'},503,origin,env);
+  if (Number(request.headers.get('content-length') || 0) > 1000) return json({error:'Invalid request'},400,origin,env);
+  let input;
+  try { const raw=await request.text(); if(raw.length>1000) throw Error('oversized'); input=JSON.parse(raw); }
+  catch { return json({error:'Invalid request'},400,origin,env); }
+  const pattern=env.DEPLOYMENT_MODE==='live'?/^cs_live_[A-Za-z0-9]{10,128}$/:/^cs_test_[A-Za-z0-9]{10,128}$/;
+  if(!pattern.test(input?.sessionId||'') || !['preview','confirm'].includes(input?.action))
+    return json({error:'Invalid request'},400,origin,env);
+  const row=await env.DB.prepare(`SELECT stripe_payment_intent_id AS paymentIntentId, flow, tier, amount, currency, payment_status AS paymentStatus
+    FROM payment_ledger WHERE stripe_session_id=?`).bind(input.sessionId).first();
+  if(!row || !/^pi_[A-Za-z0-9]+$/.test(row.paymentIntentId||'') || row.paymentStatus!=='paid')
+    return json({error:'No refundable payment found for this entry'},409,origin,env);
+  const charges=await stripeGet(env,'charges',{payment_intent:row.paymentIntentId,limit:'10'});
+  const candidates=(charges.data||[]).filter(c=>c.paid && c.status==='succeeded' && c.payment_intent===row.paymentIntentId);
+  if(candidates.length!==1) return json({error:'Payment needs review in Stripe'},409,origin,env);
+  const charge=candidates[0];
+  const remaining=charge.amount-charge.amount_refunded;
+  if(!Number.isSafeInteger(remaining) || remaining<=0 || charge.currency!==row.currency)
+    return json({error:'No refundable balance found'},409,origin,env);
+  if(input.action==='preview') return json({amount:remaining,currency:charge.currency,flow:row.flow,tier:row.tier},200,origin,env);
+  if(input.confirmation!=='REFUND' || input.expectedAmount!==remaining)
+    return json({error:'Refund amount changed; preview again'},409,origin,env);
+  const params=new URLSearchParams({charge:charge.id,amount:String(remaining),reason:'requested_by_customer'});
+  formField(params,'metadata[tipwheelz_session_id]',input.sessionId);
+  const refund=await stripePost(env,'refunds',params,`tipwheelz-admin-refund-${charge.id}`);
+  if(!['succeeded','pending','requires_action'].includes(refund.status))
+    return json({error:'Refund requires review in Stripe'},409,origin,env);
+  await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_session_id=? AND payment_status=?')
+    .bind(refund.status==='succeeded' && remaining===charge.amount?'refunded':'refund_pending',input.sessionId,'paid').run();
+  return json({ok:true,status:refund.status,amount:refund.amount,currency:refund.currency},200,origin,env);
+}
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -248,6 +295,7 @@ export default {
       if (!origins(env).has(origin)) return json({error: 'Origin not allowed'}, 403);
       if (request.method === 'OPTIONS') return new Response(null, {status: 204, headers: headersFor(origin, env)});
       if (url.pathname === '/api/tipwheelz/admin/wall') return await adminWall(request, env, origin);
+      if (url.pathname === '/api/tipwheelz/admin/refund') return await adminRefund(request, env, origin);
       if (url.pathname === '/api/tipwheelz/status' && request.method === 'GET') {
         const sessionId = url.searchParams.get('session_id') || '';
         if (!(env.DEPLOYMENT_MODE === 'live' ? /^cs_live_[A-Za-z0-9]{10,128}$/ : /^cs_test_[A-Za-z0-9]{10,128}$/).test(sessionId)) return json({error: 'Invalid session'}, 400, origin, env);
