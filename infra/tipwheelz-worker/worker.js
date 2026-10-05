@@ -211,7 +211,7 @@ async function adminWall(request, env, origin) {
   if (!(await isWallAdmin(request, env))) return json({error: 'Unauthorized'}, 401, origin, env);
   if (request.method === 'GET') {
     const {results} = await env.DB.prepare(`SELECT l.stripe_session_id AS sessionId, l.donor_name AS submittedName,
-      l.amount, l.currency, l.flow, l.tier, l.payment_status AS paymentStatus,
+      l.message AS note, l.amount, l.currency, l.flow, l.tier, l.payment_status AS paymentStatus,
       l.wall_of_thanks_consent AS consent, w.display_name AS displayName, w.approved,
       CASE WHEN l.payment_status='paid' AND l.stripe_payment_intent_id IS NOT NULL THEN 1 ELSE 0 END AS refundable
       FROM payment_ledger l LEFT JOIN wall_entries w ON w.payment_reference=l.stripe_session_id
