@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS stripe_events (
   event_type TEXT NOT NULL,
   processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS stripe_refund_state (
+  payment_intent_id TEXT PRIMARY KEY,
+  payment_status TEXT NOT NULL CHECK (payment_status IN ('refunded', 'partially_refunded')),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS checkout_rate (
   key TEXT PRIMARY KEY,
   window_start INTEGER NOT NULL,

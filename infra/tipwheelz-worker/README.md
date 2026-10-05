@@ -1,74 +1,28 @@
 # TipWheelz Checkout Worker
 
-The active sandbox API and Wall of Thanks are deployed together at
-`https://tipwheelz-wall.tipwheelz-rollflow.workers.dev`.
+TipWheelz runs separate Cloudflare Workers and D1 databases for sandbox and live payments. The public GitHub Pages site uses `tipwheelz-live`; the Mack sandbox preview uses `tipwheelz-wall`. Do not copy keys, webhook signing secrets, or donor records between them.
 
-The D1 database `tipwheelz-db` holds `payment_ledger`, `stripe_events`,
-`checkout_rate`, and moderated `wall_entries` tables. `schema.sql` creates
-the first three; `wall-admin-index.sql` adds a unique index after the wall
-table exists. The public `/wall` endpoint returns only names for paid,
-consenting, approved entries.
+The Worker maps nine tier keys to server-side Stripe Prices, creates custom Checkout Sessions, verifies raw-body webhook signatures, records a private ledger, and serves the opt-in Wall of Thanks. The public `/wall` response contains names only. The authenticated admin endpoint returns amounts and private notes. Admin authentication uses the `WALL_ADMIN_TOKEN` secret; the page URL itself is not an access control.
 
-The Roll Flow sandbox webhook sends signed events to
-`/api/tipwheelz/webhook`. The Worker has `STRIPE_API_KEY` (`rk_test_` or
-`sk_test_`), `STRIPE_WEBHOOK_SECRET`, and `RATE_LIMIT_SALT` as secrets.
-Keep these out of page HTML and source files. The former standalone
-`tipwheelz-checkout-sandbox` Worker is not used by the preview page.
+## D1 schema and migrations
 
-The API supports nine allowlisted tiers: five one-time and four monthly.
-`POST /api/tipwheelz/checkout-session` creates a Checkout Session in Elements
-mode and returns a client secret. The browser also needs the Roll Flow sandbox
-`pk_test_` publishable key. `GET /api/tipwheelz/status?session_id=...` returns
-only the webhook ledger's payment status and flow. The billing portal route
-requires a signed, expiring token returned with a monthly Checkout Session.
-It resolves the Stripe customer ID from a paid D1 ledger entry; the client
-cannot choose a customer ID. A supporter who changes devices or loses the
-token should contact info@rollflow.net. The token expires after 180 days.
+For a new database, apply `schema.sql` and the Wall of Thanks schema, then `wall-admin-index.sql`. For an existing database, apply `refund-state-migration.sql` before deploying a Worker that uses `stripe_refund_state`.
 
-## Live preparation
+The refund state table keeps `charge.refunded` authoritative even when Stripe events arrive out of order. After migrating an existing database, backfill any known refunds:
 
-The separate `tipwheelz-live` Worker is uploaded with a separate, empty
-`tipwheelz-live-db` D1 database. Its workers.dev subdomain is enabled for
-Stripe's live webhook, but checkout is unconfigured. Do not point the public
-page at it yet.
+```sql
+INSERT OR IGNORE INTO stripe_refund_state (payment_intent_id, payment_status)
+SELECT stripe_payment_intent_id, payment_status FROM payment_ledger
+WHERE stripe_payment_intent_id IS NOT NULL
+AND payment_status IN ('refunded','partially_refunded');
+```
 
-All nine live `STRIPE_PRICE_TIP_5`,
-`STRIPE_PRICE_TIP_10`, `STRIPE_PRICE_TIP_25`, `STRIPE_PRICE_TIP_50`,
-`STRIPE_PRICE_TIP_100`, `STRIPE_PRICE_MONTHLY_3`, `STRIPE_PRICE_MONTHLY_7`,
-`STRIPE_PRICE_MONTHLY_15`, and `STRIPE_PRICE_MONTHLY_30` bindings are installed.
-The $30/month Price is `price_1UMc91PS1f7Z3Ox5dJU6yrDc`. Before enabling live
-checkout, set `STRIPE_API_KEY` to a live restricted key with Checkout Session
-and Billing Portal session creation permissions. `STRIPE_WEBHOOK_SECRET` is
-already installed from live Stripe
-webhook endpoint `we_1UMcCAPS1f7Z3Ox5hrq2IjqV`, which targets
-`https://tipwheelz-live.tipwheelz-rollflow.workers.dev/api/tipwheelz/webhook`.
-Independent production `RATE_LIMIT_SALT` and `PORTAL_TOKEN_SECRET` values are
-also installed; do not copy their sandbox counterparts. Set `RETURN_URL`,
-`PORTAL_RETURN_URL`, and `ALLOWED_ORIGINS` to the final HTTPS site.
+Sandbox and live databases were migrated independently on October 5, 2026. The sandbox $5 refunded entry was backfilled. Keep this migration in new deployments and restore procedures.
 
-The page needs a `pk_live_` key only when the production Worker, live webhook,
-live Prices, portal, and end-to-end sandbox cases have passed. Keep the
-`pk_test_` preview at `/checkout-preview/` until then. Do not put restricted or
-secret keys into HTML or GitHub. Subscription tax treatment should be reviewed
-in Stripe before launch; enabling automatic tax without an active registration
-does not collect tax.
+## Security checks
 
-Custom Mack preview: `https://app.macknified.com/p/Vz3RFJjv`.
-Its `PUBLISHABLE_KEY` constant contains the public sandbox key. The original Mack sandbox page remains at
-`https://app.macknified.com/p/SALciv6U`. Session creation was verified for
-one-time and monthly tiers. Card confirmation and signed webhook delivery
-still need end-to-end testing.
+Run `node worker.security.test.mjs` and `node worker.test.mjs` after changing checkout, webhook, refund, or wall logic. The security suite uses an in-memory SQLite database and signed mock Stripe events. It checks access controls, public/private data separation, signature rejection, out-of-order refunds, invalid inputs, and the checkout rate limit. These tests do not replace an external assessment or a real Stripe sandbox purchase.
 
-The return page at `https://app.macknified.com/p/zJugqV` stays pending until
-a signed webhook records a paid ledger row. Publishing to the Wall of Thanks
-requires a separate review of verified payment and explicit consent.
+The sandbox checkout is at `https://app.macknified.com/p/Vz3RFJjv`; the live public site is at `https://manthey1-crypto.github.io/tipwheelz-mack-preview/`. The live admin page is `/wall-admin-live/` and the sandbox admin remains in Mack at `https://app.macknified.com/p/WYZfRwv`. Do not use Mack's “sync all” for the GitHub repository because it may restore deleted sandbox paths.
 
-The public wall is `https://app.macknified.com/p/BAYYfwE2` and GitHub
-`/wall/`. The admin page is `https://app.macknified.com/p/WYZfRwv` and
-GitHub `/wall-admin/`. The admin page contains no credential. It prompts for
-the separate `WALL_ADMIN_TOKEN` Worker secret, held only in browser memory,
-then calls `GET/POST /api/tipwheelz/admin/wall`. It shows ledger amounts and
-can publish, rename, or remove consenting paid entries. The amount is
-read-only. The Cloudflare Access product was not enabled on this account at
-the time of setup; token access should be replaced with identity-backed
-authentication before any live launch.
+Keep `STRIPE_SECRET_KEY` or `STRIPE_API_KEY`, `STRIPE_WEBHOOK_SECRET`, `WALL_ADMIN_TOKEN`, `PORTAL_TOKEN_SECRET`, and `RATE_LIMIT_SALT` only in Cloudflare secrets. The `pk_live_` and `pk_test_` publishable keys belong in the respective browser pages. Billing Portal tokens are signed, tied to a verified monthly ledger record, and expire after 180 days; supporters who lose access should contact `info@rollflow.net`.

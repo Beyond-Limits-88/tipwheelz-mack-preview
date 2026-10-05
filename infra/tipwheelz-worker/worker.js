@@ -184,17 +184,33 @@ async function webhook(request, env) {
       payment_status=CASE WHEN payment_ledger.payment_status IN ('refunded','partially_refunded','refund_pending') OR (excluded.payment_status='pending' AND payment_ledger.payment_status='paid') THEN payment_ledger.payment_status ELSE excluded.payment_status END,
       updated_at=CURRENT_TIMESTAMP`)
       .bind(obj.id, obj.payment_intent || null, obj.customer || null, obj.subscription || null, meta.tipwheelz_flow, meta.tipwheelz_tier, obj.amount_total ?? choices[meta.tipwheelz_tier][2], obj.currency || 'usd', obj.customer_details?.email || obj.customer_email || '', meta.tipwheelz_name || '', meta.tipwheelz_message || '', meta.tipwheelz_wall_of_thanks_consent === 'true' ? 1 : 0, status, obj.subscription ? 'active' : null).run();
+    // A refund webhook may arrive before checkout completion. Keep that state authoritative.
+    if (typeof obj.payment_intent === 'string') await env.DB.prepare(`UPDATE payment_ledger
+      SET payment_status=(SELECT payment_status FROM stripe_refund_state WHERE payment_intent_id=?), updated_at=CURRENT_TIMESTAMP
+      WHERE stripe_session_id=? AND stripe_payment_intent_id=?
+      AND EXISTS (SELECT 1 FROM stripe_refund_state WHERE payment_intent_id=?)`)
+      .bind(obj.payment_intent, obj.id, obj.payment_intent, obj.payment_intent).run();
   } else if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
     const sub = typeof obj.subscription === 'string' ? obj.subscription : obj.parent?.subscription_details?.subscription;
-    if (sub) await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, subscription_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_subscription_id=?')
+    if (sub) await env.DB.prepare(`UPDATE payment_ledger
+      SET payment_status=CASE WHEN payment_status IN ('refunded','partially_refunded','refund_pending') THEN payment_status ELSE ? END,
+      subscription_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_subscription_id=?`)
       .bind(event.type === 'invoice.paid' ? 'paid' : 'failed', event.type === 'invoice.paid' ? 'active' : 'past_due', sub).run();
   } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
     await env.DB.prepare('UPDATE payment_ledger SET subscription_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_subscription_id=?')
       .bind(obj.status || 'canceled', obj.id).run();
   } else if (event.type === 'charge.refunded') {
     const pi = typeof obj.payment_intent === 'string' ? obj.payment_intent : null;
-    if (pi) await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_payment_intent_id=?')
-      .bind(obj.amount_refunded >= obj.amount ? 'refunded' : 'partially_refunded', pi).run();
+    if (pi) {
+      const refundStatus = obj.amount_refunded >= obj.amount ? 'refunded' : 'partially_refunded';
+      await env.DB.prepare(`INSERT INTO stripe_refund_state (payment_intent_id, payment_status)
+        VALUES (?, ?) ON CONFLICT(payment_intent_id) DO UPDATE SET
+        payment_status=CASE WHEN stripe_refund_state.payment_status='refunded' THEN 'refunded' ELSE excluded.payment_status END,
+        updated_at=CURRENT_TIMESTAMP`).bind(pi, refundStatus).run();
+      await env.DB.prepare(`UPDATE payment_ledger
+        SET payment_status=(SELECT payment_status FROM stripe_refund_state WHERE payment_intent_id=?), updated_at=CURRENT_TIMESTAMP
+        WHERE stripe_payment_intent_id=?`).bind(pi, pi).run();
+    }
   } else if (event.type === 'payment_intent.payment_failed') {
     await env.DB.prepare('UPDATE payment_ledger SET payment_status=?, updated_at=CURRENT_TIMESTAMP WHERE stripe_payment_intent_id=?').bind('failed', obj.id).run();
   }
