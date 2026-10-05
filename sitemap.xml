@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall-admin/</loc>
+    <lastmod>2026-10-05T00:23:42.541Z</lastmod>
+    <changefreq>weekly</changefreq>
+  </url>
+  <url>
     <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall-admin-live/</loc>
-    <lastmod>2026-10-05T00:12:42.299Z</lastmod>
+    <lastmod>2026-10-05T00:23:33.909Z</lastmod>
     <changefreq>weekly</changefreq>
   </url>
   <url>
@@ -33,11 +38,6 @@
   <url>
     <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/terms/</loc>
     <lastmod>2026-10-04T00:34:52.110Z</lastmod>
-    <changefreq>weekly</changefreq>
-  </url>
-  <url>
-    <loc>https://manthey1-crypto.github.io/tipwheelz-mack-preview/wall-admin/</loc>
-    <lastmod>2026-10-03T19:13:12.201Z</lastmod>
     <changefreq>weekly</changefreq>
   </url>
 </urlset>
